@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitwise Math Parser</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            margin: 0;
+        }
+        code { background: #313244; padding: 4px 8px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h2>Bitwise Math Parser</h2>
+    <p>Refresh the page to calculate another expression.</p>
+    <p><em>Note: Because this uses bitwise logic, it only supports 32-bit integers. Decimals will be ignored.</em></p>
+
+    <script>
+        // --- 1. THE BITWISE MATH ENGINE ---
+        // These replace JavaScript's built-in arithmetic operators.
+
+        function bitAdd(a, b) {
+            while (b !== 0) {
+                let carry = a & b; 
+                a = a ^ b;         
+                b = carry << 1;    
+            }
+            return a;
+        }
+
+        function bitSubtract(a, b) {
+            let negativeB = bitAdd(~b, 1);
+            return bitAdd(a, negativeB);
+        }
+
+        function bitMultiply(a, b) {
+            let result = 0;
+            let isNegative = (a < 0) ^ (b < 0);
+            a = Math.abs(a); 
+            b = Math.abs(b);
+
+            while (b > 0) {
+                if (b & 1) result = bitAdd(result, a);
+                a = a << 1;
+                b = b >> 1;
+            }
+            return isNegative ? bitAdd(~result, 1) : result;
+        }
+
+        function bitDivide(dividend, divisor) {
+            if (divisor === 0) throw new Error("Cannot divide by zero");
+            
+            let isNegative = (dividend < 0) ^ (divisor < 0);
+            let a = Math.abs(dividend);
+            let b = Math.abs(divisor);
+            let quotient = 0;
+
+            while (a >= b) {
+                let temp = b;
+                let multiple = 1;
+                
+                while (a >= (temp << 1) && (temp << 1) > 0) {
+                    temp = temp << 1;
+                    multiple = multiple << 1;
+                }
+                
+                a = bitSubtract(a, temp);
+                quotient = bitAdd(quotient, multiple);
+            }
+
+            return isNegative ? bitAdd(~quotient, 1) : quotient;
+        }
+
+
+        // --- 2. THE RECURSIVE DESCENT PARSER ---
+        
+        function evaluateMath(expr) {
+            const str = expr.replace(/\s+/g, '');
+            let pos = 0;
+
+            function parseExpression() {
+                let value = parseTerm();
+                while (pos < str.length && (str[pos] === '+' || str[pos] === '-')) {
+                    let op = str[pos++];
+                    let nextTerm = parseTerm();
+                    // Using Bitwise Add/Subtract
+                    value = (op === '+') ? bitAdd(value, nextTerm) : bitSubtract(value, nextTerm);
+                }
+                return value;
+            }
+
+            function parseTerm() {
+                let value = parseFactor();
+                while (pos < str.length && (str[pos] === '*' || str[pos] === '/')) {
+                    let op = str[pos++];
+                    let nextFactor = parseFactor();
+                    // Using Bitwise Multiply/Divide
+                    value = (op === '*') ? bitMultiply(value, nextFactor) : bitDivide(value, nextFactor);
+                }
+                return value;
+            }
+
+            function parseFactor() {
+                if (pos < str.length && str[pos] === '(') {
+                    pos++; 
+                    let value = parseExpression();
+                    pos++; 
+                    return value;
+                }
+                
+                let sign = 1;
+                if (pos < str.length && str[pos] === '-') {
+                    sign = -1;
+                    pos++;
+                }
+
+                let start = pos;
+                while (pos < str.length && /[0-9]/.test(str[pos])) {
+                    pos++;
+                }
+                
+                if (start === pos) throw new Error("Invalid syntax");
+                
+                // Parse as Integer since bitwise math cannot handle floats
+                let parsedNum = parseInt(str.slice(start, pos), 10);
+                
+                // Apply negative sign using bitwise math if necessary
+                return sign === -1 ? bitMultiply(parsedNum, -1) : parsedNum;
+            }
+
+            return parseExpression();
+        }
+
+        // --- 3. AUTO-LAUNCH LOGIC ---
+        
+        window.onload = function() {
+            setTimeout(() => {
+                const userInput = prompt("Enter a math expression (e.g., 15 + 3 * (10 - 2)):");
+
+                if (userInput) {
+                    try {
+                        const result = evaluateMath(userInput);
+                        if (isNaN(result)) {
+                            alert("Error: Calculation resulted in Not-a-Number.");
+                        } else {
+                            alert("Result: " + result);
+                        }
+                    } catch (error) {
+                        alert("Error: " + error.message);
+                    }
+                } else {
+                    alert("No input provided.");
+                }
+            }, 100);
+        };
+    </script>
+</body>
+</html>
